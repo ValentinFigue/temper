@@ -4,12 +4,14 @@ set -e
 MODE="local"
 WITH_CLAUDE_MD=false
 WITH_PROACTIVE=true
+WITH_HOOK=true
 
 for arg in "$@"; do
   case "$arg" in
     global)              MODE="global" ;;
     --claude-md)         WITH_CLAUDE_MD=true ;;
     --no-proactive)      WITH_PROACTIVE=false ;;
+    --no-hook)           WITH_HOOK=false ;;
   esac
 done
 
@@ -93,27 +95,31 @@ mkdir -p "$COMMANDS_DIR"
 cp "$REPO_DIR/.claude/commands/temper.md" "$COMMANDS_DIR/temper.md"
 echo "✓ /temper installed to $COMMANDS_DIR"
 
-# Install hook
-HOOKS_DEST="$SETTINGS_DIR/hooks"
-mkdir -p "$HOOKS_DEST"
-cp "$REPO_DIR/hooks/enforce-temper.sh" "$HOOKS_DEST/enforce-temper.sh"
-chmod +x "$HOOKS_DEST/enforce-temper.sh"
-HOOK_PATH="$HOOKS_DEST/enforce-temper.sh"
-echo "✓ enforce-temper.sh installed to $HOOK_PATH"
+if [ "$WITH_HOOK" = true ]; then
+  # Install hook
+  HOOKS_DEST="$SETTINGS_DIR/hooks"
+  mkdir -p "$HOOKS_DEST"
+  cp "$REPO_DIR/hooks/enforce-temper.sh" "$HOOKS_DEST/enforce-temper.sh"
+  chmod +x "$HOOKS_DEST/enforce-temper.sh"
+  HOOK_PATH="$HOOKS_DEST/enforce-temper.sh"
+  echo "✓ enforce-temper.sh installed to $HOOK_PATH"
 
-# Inject permissions + hook into settings.json
-SETTINGS_FILE="$SETTINGS_DIR/settings.json"
-mkdir -p "$SETTINGS_DIR"
-if [ ! -f "$SETTINGS_FILE" ]; then
-  printf '{\n  "permissions": {\n    "allow": ["Read", "Write", "Bash"]\n  }\n}\n' > "$SETTINGS_FILE"
-  echo "✓ Created $SETTINGS_FILE with permissions"
-fi
+  # Inject permissions + hook into settings.json
+  SETTINGS_FILE="$SETTINGS_DIR/settings.json"
+  mkdir -p "$SETTINGS_DIR"
+  if [ ! -f "$SETTINGS_FILE" ]; then
+    printf '{\n  "permissions": {\n    "allow": ["Read", "Write", "Bash"]\n  }\n}\n' > "$SETTINGS_FILE"
+    echo "✓ Created $SETTINGS_FILE with permissions"
+  fi
 
-if _json_add_perms_and_hook "$SETTINGS_FILE" "$HOOK_PATH" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"; then
-  echo "✓ Permissions (Read, Write, Bash) and enforce-temper hook added to $SETTINGS_FILE"
+  if _json_add_perms_and_hook "$SETTINGS_FILE" "$HOOK_PATH" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"; then
+    echo "✓ Permissions (Read, Write, Bash) and enforce-temper hook added to $SETTINGS_FILE"
+  else
+    echo "  Could not update $SETTINGS_FILE automatically (install python3, node, or jq)."
+    echo "  Manually add permissions and register the hook at: $HOOK_PATH"
+  fi
 else
-  echo "  Could not update $SETTINGS_FILE automatically (install python3, node, or jq)."
-  echo "  Manually add permissions and register the hook at: $HOOK_PATH"
+  echo "  Hook registration skipped (--no-hook)"
 fi
 
 # Optionally inject code review discipline into CLAUDE.md
@@ -124,6 +130,8 @@ if [ "$WITH_CLAUDE_MD" = true ]; then
     echo "  Skipping CLAUDE.md injection (--no-proactive flag set)"
   elif [ -f "$CLAUDE_FILE" ] && grep -q "$MARKER" "$CLAUDE_FILE"; then
     echo "✓ $CLAUDE_FILE already contains temper section — skipped"
+  elif [ -f "$CLAUDE_FILE" ] && grep -q "<!-- aether:start -->" "$CLAUDE_FILE"; then
+    echo "✓ $CLAUDE_FILE managed by aether — temper block already included, skipped"
   else
     {
       printf "\n"
@@ -159,5 +167,6 @@ else
   echo "  With proactive CLAUDE.md rules:   bash install.sh --claude-md"
   echo "  Global + proactive rules:         bash install.sh global --claude-md"
   echo "  Disable proactive suggestions:    bash install.sh --claude-md --no-proactive"
+  echo "  Skip hook registration:           bash install.sh --no-hook"
   echo "  One-liner (no clone needed):      curl -fsSL https://raw.githubusercontent.com/ValentinFigue/temper/main/install.sh | bash -s global"
 fi

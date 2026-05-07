@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2] — 2026-05-07
+
+### Added
+- `--no-hook` flag for `install.sh` — installs the `/temper` command without registering the `PreToolUse` hook, for use by suite installers that manage hooks centrally
+- Aether sentinel guard in `install.sh --claude-md` — skips CLAUDE.md injection when `<!-- aether:start -->` is already present, preventing double-injection when aether has already included the temper block
+
+---
+
 ## [0.1.1] — 2026-05-07
 
 ### Added
